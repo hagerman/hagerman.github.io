@@ -9,9 +9,19 @@
 </head>
 <body>
 	
+<div id="container">
+	<div class="jumbotron">
+	
 <a class="btn btn-primary" href="gonative://statusbar/set?style=light&color=00000000&overlay=true" role="button">Set Status Bar for SEA Port</a>
 
-<a class="btn btn-primary" href="gonative://auth/status?callbackFunction=gonative_status_afterlogin" role="button">Set Secret</a>
+<a class="btn btn-primary" href="gonative://auth/status?callbackFunction=gonative_status_afterlogin" role="button">Set Secret for Touch ID</a>
+
+<hr>
+
+<a class="btn btn-success" href="https://qa.seaport.seaworldentertainment.com/client/" role="button">Go back to SEA Port</a>
+
+</div>
+</div>
 
 	<script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.3/umd/popper.min.js" integrity="sha384-vFJXuSJphROIrBnz7yo7oB41mKfc8JzQZiCq4NCceLEaO4IHwicKwpJf9c9IpFgh" crossorigin="anonymous"></script>
@@ -24,7 +34,7 @@
 	//		window.location.href = "https://qa.seaport.seaworldentertainment.com/client";
 		}
 	
-		window.location.href = 'gonative://auth/status?callbackFunction=gonative_status_beforelogin';
+//		window.location.href = 'gonative://auth/status?callbackFunction=gonative_status_beforelogin';
 	
 		function gonative_status_beforelogin(data) {
 		   if (data && data.hasTouchID && hasSecret) {
@@ -34,7 +44,7 @@
 		}
 		function gonative_secret_callback(data) {
 		    if (data && data.success && data.secret) {
-					alert("Got this secret: " + data);
+					alert("Got this secret: " + data.secret);
 		    }
 		}
 		
