@@ -14,11 +14,23 @@
 	
 <a class="btn btn-primary" href="gonative://statusbar/set?style=light&color=00000000&overlay=true" role="button">Set Status Bar for SEA Port</a>
 
-<a class="btn btn-primary" href="gonative://statusbar/set?style=dark&color=ffffffff&overlay=false" role="button">Set Status Bar for SEA ID</a>
+<a class="btn btn-info" href="gonative://statusbar/set?style=dark&color=ffffffff&overlay=false" role="button">Set Status Bar for SEA ID</a>
 
 <hr>
 
-<a class="btn btn-primary" href="gonative://auth/status?callbackFunction=gonative_status_afterlogin" role="button">Set Secret for Touch ID</a>
+TouchID Info:
+<pre><code id="touchid_info">Not received.</code></pre>
+
+<a class="btn btn-primary" href="gonative://auth/save?secret=beSureToDrinkYourOvaltine&callbackFunction=gonative_touchid_info" role="button">Set Secret for Touch ID</a>
+
+<a class="btn btn-info" href="gonative://auth/get?callbackFunction=gonative_touchid_info&prompt=SEA Port uses this to automatically sign you in." role="button">Get Secret for Touch ID</a>
+
+<a class="btn btn-danger" href="gonative://auth/delete?callbackFunction=gonative_touchid_info" role="button">Delete Secret for Touch ID</a>
+
+<hr>
+
+OneSignal Info:
+<pre><code id="onesignal_info">Not received.</code></pre>
 
 <hr>
 
@@ -34,36 +46,20 @@
 	<script>
 		window.onload = function ()
 		{
-	//		window.location.href = "gonative://statusbar/set?style=light&color=00000000&overlay=true";
-	//		window.location.href = "https://qa.seaport.seaworldentertainment.com/client";
+      window.location.href = 'gonative://auth/status?callbackFunction=gonative_touchid_info';
 		}
-	
-//		window.location.href = 'gonative://auth/status?callbackFunction=gonative_status_beforelogin';
-	
-		function gonative_status_beforelogin(data) {
-		   if (data && data.hasTouchID && hasSecret) {
-		       // Prompt the user to use the fingerprint to log in
-		       window.location.href = 'gonative://auth/get?callbackFunction=gonative_secret_callback';
-		   }
+	    
+		function gonative_touchid_info(info) {
+      var pretty_info = JSON.stringify(info);
+      var elem = document.getElementById('touchid_info');
+      elem.innerHTML = pretty_info;
 		}
-		function gonative_secret_callback(data) {
-		    if (data && data.success && data.secret) {
-					alert("Got this secret: " + data.secret);
-		    }
-		}
-		
-		function gonative_status_afterlogin(data) {
-		if (data && data.hasTouchID) {
-						var secret = "Be sure to drink your Ovaltine.";
-		        window.location.href = 'gonative://auth/save?secret=' + encodeURIComponent(secret);
-						
-						alert("Secret has been set");
-		    }
-				else
-				{
-					alert("Touch ID is not available");
-				}
-		}
+    
+    function gonative_onesignal_info(info) {
+      var pretty_info = JSON.stringify(info);
+      var elem = document.getElementById('onesignal_info');
+      elem.innerHTML = pretty_info;
+    }
 		
 	</script>
 </body>
