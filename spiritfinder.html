@@ -9,7 +9,10 @@
       var play = document.getElementById("play");
       var pause = document.getElementById("pause");
       var stop = document.getElementById("stop");
-      var constraints = {audio:true, video:true};
+      var videoConstraints = {
+        facingMode: 'environment'
+      };
+      var constraints = {audio:false, video:videoConstraints};
 
       function success(stream) {
         camera.src = stream;
