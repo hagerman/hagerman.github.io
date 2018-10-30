@@ -1,41 +1,55 @@
-window.onload = function() {
+/*
+ *  Copyright (c) 2015 The WebRTC project authors. All Rights Reserved.
+ *
+ *  Use of this source code is governed by a BSD-style license
+ *  that can be found in the LICENSE file in the root of the source
+ *  tree.
+ */
+'use strict';
 
-  // Normalize the various vendor prefixed versions of getUserMedia.
-  navigator.getUserMedia = (navigator.getUserMedia ||
-                            navigator.webkitGetUserMedia ||
-                            navigator.mozGetUserMedia || 
-                            navigator.msGetUserMedia);
+// Put variables in global scope to make them available to the browser console.
+const constraints = window.constraints = {
+  audio: false,
+  video: { facingMode: { exact: "environment" } }
+};
 
+function handleSuccess(stream) {
+  const video = document.querySelector('video');
+  const videoTracks = stream.getVideoTracks();
+  console.log('Got stream with constraints:', constraints);
+  console.log(`Using video device: ${videoTracks[0].label}`);
+  window.stream = stream; // make variable available to browser console
+  video.srcObject = stream;
 }
 
-// Check that the browser supports getUserMedia.
-// If it doesn't show an alert, otherwise continue.
-if (navigator.getUserMedia) {
-  // Request the camera.
-  navigator.getUserMedia(
-    // Constraints
-    {
-      video: { facingMode: { exact: "environment" } }
-    },
-
-    // Success Callback
-    function(localMediaStream) {
-      // Get a reference to the video element on the page.
-      var vid = document.getElementById('camera-stream');
-
-      // Create an object URL for the video stream and use this 
-      // to set the video source.
-      vid.src = window.URL.createObjectURL(localMediaStream);
-    },
-
-    // Error Callback
-    function(err) {
-      // Log the error to the console.
-      console.log('The following error occurred when trying to use getUserMedia: ' + err);
-    }
-  );
-
-} else {
-  alert('Sorry, your browser does not support getUserMedia');
+function handleError(error) {
+  if (error.name === 'ConstraintNotSatisfiedError') {
+    let v = constraints.video;
+    errorMsg(`The resolution ${v.width.exact}x${v.height.exact} px is not supported by your device.`);
+  } else if (error.name === 'PermissionDeniedError') {
+    errorMsg('Permissions have not been granted to use your camera and ' +
+      'microphone, you need to allow the page access to your devices in ' +
+      'order for the demo to work.');
+  }
+  errorMsg(`getUserMedia error: ${error.name}`, error);
 }
 
+function errorMsg(msg, error) {
+  const errorElement = document.querySelector('#errorMsg');
+  errorElement.innerHTML += `<p>${msg}</p>`;
+  if (typeof error !== 'undefined') {
+    console.error(error);
+  }
+}
+
+async function init(e) {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    handleSuccess(stream);
+    e.target.disabled = true;
+  } catch (e) {
+    handleError(e);
+  }
+}
+
+document.querySelector('#showVideo').addEventListener('click', e => init(e));
