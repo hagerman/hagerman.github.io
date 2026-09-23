@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Median FCM Hardware Test</title>
+  <title>Median Bridge & Transport Diagnostic</title>
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 14px;
       margin: 0;
       background-color: #f1f5f9;
       color: #0f172a;
     }
     h2 {
-      margin: 0 0 12px 0;
-      font-size: 1.25rem;
+      margin: 0 0 10px 0;
+      font-size: 1.15rem;
       color: #1e293b;
     }
     .card {
@@ -22,7 +22,7 @@
       border: 1px solid #cbd5e1;
       border-radius: 8px;
       padding: 12px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
     .label {
@@ -34,8 +34,8 @@
       margin-bottom: 4px;
     }
     .mono {
-      font-family: ui-monospace, Menlo, Monaco, Consolas, monospace;
-      font-size: 0.85rem;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.8rem;
       word-break: break-all;
       background: #f8fafc;
       border: 1px solid #e2e8f0;
@@ -43,69 +43,64 @@
       border-radius: 6px;
       min-height: 20px;
     }
-    .btn-grid {
+    .grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 8px;
+      gap: 6px;
     }
     button {
       background-color: #0f766e;
       color: #ffffff;
       border: none;
-      padding: 12px 8px;
-      font-size: 0.85rem;
+      padding: 10px 8px;
+      font-size: 0.8rem;
       font-weight: 600;
       border-radius: 6px;
       cursor: pointer;
     }
-    button.accent {
+    button.alt {
       background-color: #2563eb;
     }
-    button.secondary {
-      background-color: #475569;
-    }
-    button.copy {
-      width: 100%;
-      background-color: #1e293b;
-      margin-top: 8px;
+    button.dark {
+      background-color: #334155;
     }
     #log {
-      height: 240px;
+      height: 220px;
       overflow-y: auto;
       white-space: pre-wrap;
-      font-size: 0.75rem;
     }
   </style>
 </head>
 <body>
 
-  <h2>Median FCM Diagnostic Harness</h2>
+  <h2>Median Bridge Connectivity Test</h2>
 
   <div class="card">
-    <div class="label">Registration Status</div>
+    <div class="label">Bridge Status</div>
     <div id="status" class="mono">Ready</div>
   </div>
 
   <div class="card">
-    <div class="label">Device Token</div>
+    <div class="label">Device Token / Result</div>
     <div id="token" class="mono">(None)</div>
-    <button class="copy" onclick="copyToken()">Copy Token</button>
   </div>
 
-  <div class="card btn-grid">
-    <button class="accent" onclick="testCheckPermission()">1. Check Permission</button>
-    <button class="accent" onclick="testRequestPermission()">2. Request Perm</button>
-    <button onclick="testGetTokenPromise()">3. Get Token (Direct)</button>
-    <button class="secondary" onclick="testRegisterPromise()">4. Register (Direct)</button>
+  <div class="card grid">
+    <button class="dark" onclick="testPingDeviceInfo()">1. Ping deviceInfo()</button>
+    <button class="dark" onclick="testPermissionsStatus()">2. Check Perm Status</button>
+    <button class="alt" onclick="testNativeClipboard()">3. Write Clipboard</button>
+    <button class="alt" onclick="testFCMDirect()">4. FCM getToken()</button>
+    <button onclick="testFCMRegister()">5. FCM register()</button>
+    <button onclick="testUriSchemeRegistration()">6. URI Scheme Fallback</button>
   </div>
 
   <div class="card">
-    <div class="label">Console Log</div>
+    <div class="label">Activity Log</div>
     <div id="log" class="mono"></div>
   </div>
 
   <script>
-    function printLog(msg) {
+    function log(msg) {
       const el = document.getElementById("log");
       const time = new Date().toLocaleTimeString();
       el.innerText += `[${time}] ${msg}\n`;
@@ -117,149 +112,143 @@
       document.getElementById("status").innerText = text;
     }
 
-    function setToken(val) {
+    function setResult(val) {
       document.getElementById("token").innerText = val;
-      setStatus("Token acquired!");
-      printLog(">>> SUCCESS: Device Token received: " + val);
+      log(">>> Output: " + val);
     }
 
-    function getFCM() {
-      return (window.median && window.median.firebaseMessaging) ||
-             (window.gonative && window.gonative.firebaseMessaging) ||
-             null;
+    function getBridge() {
+      return window.median || window.gonative || null;
     }
 
-    function withTimeout(promise, ms, desc) {
-      return Promise.race([
-        promise,
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`${desc} timed out after ${ms / 1000}s (APNs exchange hang)`)), ms)
-        )
-      ]);
+    function timeout(ms, label) {
+      return new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out after ${ms/1000}s`)), ms)
+      );
     }
 
-    // 1. Check Permission Status
-    async function testCheckPermission() {
-      const fcm = getFCM();
-      if (!fcm || !fcm.checkPermission) {
-        printLog("Error: checkPermission method not found.");
+    // 1. General native communication test (deviceInfo)
+    async function testPingDeviceInfo() {
+      const bridge = getBridge();
+      if (!bridge) {
+        log("FAIL: window.median / window.gonative not detected");
         return;
       }
-      setStatus("Checking permission...");
-      printLog("Invoking await fcm.checkPermission()...");
+      setStatus("Calling deviceInfo()...");
+      log("Testing bridge transport with deviceInfo()...");
       try {
-        const res = await withTimeout(fcm.checkPermission(), 5000, "checkPermission");
-        printLog("checkPermission resolved: " + JSON.stringify(res));
-        setStatus("Permission: " + (res?.receive || JSON.stringify(res)));
-      } catch (err) {
-        printLog("checkPermission failed: " + err.message);
-        setStatus("Check permission failed");
-      }
-    }
-
-    // 2. Request Permission Status
-    async function testRequestPermission() {
-      const fcm = getFCM();
-      if (!fcm || !fcm.requestPermission) {
-        printLog("Error: requestPermission method not found.");
-        return;
-      }
-      setStatus("Requesting permission...");
-      printLog("Invoking await fcm.requestPermission()...");
-      try {
-        const res = await withTimeout(fcm.requestPermission(), 10000, "requestPermission");
-        printLog("requestPermission resolved: " + JSON.stringify(res));
-        setStatus("Request result: " + JSON.stringify(res));
-      } catch (err) {
-        printLog("requestPermission failed: " + err.message);
-        setStatus("Request perm failed");
-      }
-    }
-
-    // 3. Get Token via direct Promise
-    async function testGetTokenPromise() {
-      const fcm = getFCM();
-      if (!fcm || !fcm.getToken) {
-        printLog("Error: getToken method not found.");
-        return;
-      }
-      setStatus("Fetching token (awaiting promise)...");
-      printLog("Calling await fcm.getToken()...");
-
-      try {
-        // Native method expects direct invocation without options object
-        const res = await withTimeout(fcm.getToken(), 10000, "fcm.getToken()");
-        printLog("getToken resolved: " + JSON.stringify(res));
-
-        const token = (typeof res === "string") ? res : (res?.token || res?.value);
-        if (token) {
-          setToken(token);
+        if (typeof bridge.deviceInfo === 'function') {
+          const res = await Promise.race([bridge.deviceInfo(), timeout(4000, "deviceInfo")]);
+          log("SUCCESS: Native bridge is responsive! Payload: " + JSON.stringify(res));
+          setStatus("Bridge Active (deviceInfo OK)");
         } else {
-          printLog("No token field in payload: " + JSON.stringify(res));
+          log("deviceInfo function not exposed on root bridge.");
         }
       } catch (err) {
-        printLog("getToken rejected: " + err.message);
-        setStatus("Token retrieval failed");
+        log("ERROR calling deviceInfo: " + err.message);
+        setStatus("deviceInfo error/timeout");
       }
     }
 
-    // 4. Register via direct Promise
-    async function testRegisterPromise() {
-      const fcm = getFCM();
-      if (!fcm || !fcm.register) {
-        printLog("Error: register method not found.");
+    // 2. Query permissions status through the native bridge
+    async function testPermissionsStatus() {
+      const bridge = getBridge();
+      if (!bridge || !bridge.permissions || typeof bridge.permissions.status !== 'function') {
+        log("bridge.permissions.status() not available.");
         return;
       }
-      setStatus("Calling register (awaiting promise)...");
-      printLog("Calling await fcm.register()...");
-
+      setStatus("Querying permissions.status()...");
+      log("Invoking bridge.permissions.status(['Notifications'])...");
       try {
-        const res = await withTimeout(fcm.register(), 10000, "fcm.register()");
-        printLog("register resolved: " + JSON.stringify(res));
-
-        const token = (typeof res === "string") ? res : (res?.token || res?.value);
-        if (token) {
-          setToken(token);
-        }
+        const res = await Promise.race([
+          bridge.permissions.status(["Notifications"]),
+          timeout(4000, "permissions.status")
+        ]);
+        log("SUCCESS: Permissions returned: " + JSON.stringify(res));
+        setStatus("Permissions: " + JSON.stringify(res));
       } catch (err) {
-        printLog("register rejected: " + err.message);
-        setStatus("Register failed");
+        log("ERROR permissions.status: " + err.message);
+        setStatus("permissions.status error/timeout");
       }
     }
 
-    function copyToken() {
-      const token = document.getElementById("token").innerText;
-      if (!token || token === "(None)") {
-        alert("No token to copy");
+    // 3. Test a write command across the bridge
+    async function testNativeClipboard() {
+      const bridge = getBridge();
+      if (!bridge || !bridge.clipboard || typeof bridge.clipboard.set !== 'function') {
+        log("bridge.clipboard.set not available.");
         return;
       }
-      navigator.clipboard.writeText(token).then(() => alert("Copied to clipboard!"));
-    }
-
-    // Event hooks
-    function initListeners() {
-      const fcm = getFCM();
-      if (fcm && typeof fcm.addListener === "function") {
-        printLog("Registering listener on fcm.addListener...");
-        try {
-          fcm.addListener("tokenReceived", (info) => {
-            printLog("fcm.addListener('tokenReceived'): " + JSON.stringify(info));
-            if (info?.token) setToken(info.token);
-          });
-        } catch (e) {
-          printLog("addListener error: " + e.message);
-        }
+      log("Testing clipboard.set via bridge...");
+      try {
+        const testStr = "Bridge OK " + new Date().toLocaleTimeString();
+        await bridge.clipboard.set({ data: testStr });
+        log("SUCCESS: Native clipboard.set executed with: " + testStr);
+        setStatus("Clipboard set successfully");
+      } catch (err) {
+        log("ERROR clipboard: " + err.message);
       }
-
-      window.addEventListener("median_firebase_messaging_token", (e) => {
-        printLog("Window event median_firebase_messaging_token: " + JSON.stringify(e.detail));
-        if (e.detail?.token) setToken(e.detail.token);
-      });
     }
+
+    // 4. Test FCM getToken directly
+    async function testFCMDirect() {
+      const bridge = getBridge();
+      const fcm = bridge?.firebaseMessaging;
+      if (!fcm || typeof fcm.getToken !== 'function') {
+        log("fcm.getToken function not found");
+        return;
+      }
+      setStatus("Calling fcm.getToken()...");
+      log("Executing await fcm.getToken()...");
+      try {
+        const res = await Promise.race([fcm.getToken(), timeout(6000, "fcm.getToken")]);
+        log("SUCCESS fcm.getToken: " + JSON.stringify(res));
+        const token = (typeof res === 'string') ? res : (res?.token || res?.value);
+        if (token) setResult(token);
+      } catch (err) {
+        log("ERROR fcm.getToken: " + err.message);
+        setStatus("getToken failed");
+      }
+    }
+
+    // 5. Test FCM register directly
+    async function testFCMRegister() {
+      const bridge = getBridge();
+      const fcm = bridge?.firebaseMessaging;
+      if (!fcm || typeof fcm.register !== 'function') {
+        log("fcm.register function not found");
+        return;
+      }
+      setStatus("Calling fcm.register()...");
+      log("Executing await fcm.register()...");
+      try {
+        const res = await Promise.race([fcm.register(), timeout(6000, "fcm.register")]);
+        log("SUCCESS fcm.register: " + JSON.stringify(res));
+        const token = (typeof res === 'string') ? res : (res?.token || res?.value);
+        if (token) setResult(token);
+      } catch (err) {
+        log("ERROR fcm.register: " + err.message);
+        setStatus("register failed");
+      }
+    }
+
+    // 6. Test native URL scheme invocation (gonative://)
+    function testUriSchemeRegistration() {
+      log("Triggering gonative:// URL scheme registration call...");
+      window.location.href = "gonative://firebaseMessaging/register";
+      setTimeout(() => {
+        log("Attempted URI redirect. Checking if token arrived via event...");
+      }, 1500);
+    }
+
+    // Event listener for push tokens delivered asynchronously
+    window.addEventListener("median_firebase_messaging_token", (e) => {
+      log("Event 'median_firebase_messaging_token' received: " + JSON.stringify(e.detail));
+      if (e.detail?.token) setResult(e.detail.token);
+    });
 
     document.addEventListener("DOMContentLoaded", () => {
-      printLog("Diagnostic harness loaded.");
-      setTimeout(initListeners, 300);
+      log("Diagnostic loaded. UA: " + navigator.userAgent);
     });
   </script>
 </body>
