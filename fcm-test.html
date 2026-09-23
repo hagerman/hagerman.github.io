@@ -3,96 +3,115 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Median FCM Bridge Test Harness</title>
+  <title>Median FCM Diagnostics</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      padding: 20px;
+      padding: 16px;
       margin: 0;
-      background-color: #f4f6f8;
-      color: #333;
+      background-color: #f1f5f9;
+      color: #0f172a;
     }
     h2 {
       margin-top: 0;
+      font-size: 1.25rem;
       color: #1e293b;
     }
     .card {
       background: #ffffff;
+      border: 1px solid #cbd5e1;
       border-radius: 8px;
-      padding: 16px;
-      margin-bottom: 16px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      padding: 14px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
     .label {
-      font-weight: 600;
-      font-size: 0.85rem;
+      font-weight: 700;
+      font-size: 0.75rem;
       color: #64748b;
-      margin-bottom: 4px;
       text-transform: uppercase;
+      margin-bottom: 4px;
+      letter-spacing: 0.05em;
     }
     .value {
-      font-family: monospace;
-      font-size: 0.95rem;
+      font-family: ui-monospace, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.85rem;
       word-break: break-all;
-      background: #e2e8f0;
-      padding: 10px;
-      border-radius: 4px;
-      display: block;
-      min-height: 24px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      padding: 8px 10px;
+      border-radius: 6px;
+      min-height: 20px;
+    }
+    .btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
     }
     button {
-      background-color: #73c593;
-      color: #fff;
+      background-color: #0f766e;
+      color: #ffffff;
       border: none;
-      padding: 12px 20px;
-      font-size: 1rem;
+      padding: 10px;
+      font-size: 0.85rem;
+      font-weight: 600;
       border-radius: 6px;
       cursor: pointer;
-      font-weight: 600;
-      margin-right: 8px;
-      margin-bottom: 8px;
     }
-    button:hover {
-      background-color: #5ea87a;
+    button.secondary {
+      background-color: #475569;
+    }
+    button.accent {
+      background-color: #2563eb;
     }
     #log {
-      font-size: 0.8rem;
-      height: 180px;
+      height: 220px;
       overflow-y: auto;
       white-space: pre-wrap;
+      font-size: 0.75rem;
     }
   </style>
 </head>
 <body>
 
-  <h2>Median / GoNative FCM Test</h2>
+  <h2>Median / FCM Hardware Test</h2>
 
   <div class="card">
     <div class="label">Status</div>
-    <div id="status" class="value">Waiting for native bridge...</div>
+    <div id="status" class="value">Initializing...</div>
   </div>
 
   <div class="card">
-    <div class="label">Device Token</div>
+    <div class="label">FCM Device Token</div>
     <div id="token" class="value">(None)</div>
   </div>
 
   <div class="card">
-    <button onclick="requestToken()">Get Token</button>
-    <button onclick="requestRegister()">Register & Get Token</button>
-    <button onclick="copyToken()">Copy Token</button>
+    <div class="label">Bridge Diagnostics</div>
+    <div id="bridge-methods" class="value">Scanning bridge...</div>
+  </div>
+
+  <div class="card btn-group">
+    <button class="accent" onclick="runRegisterWithPermission()">1. Request & Register</button>
+    <button onclick="runGetToken()">2. Get Token</button>
+    <button class="secondary" onclick="runFetchInfo()">3. Query Info</button>
+    <button class="secondary" onclick="inspectBridge()">4. Re-Scan APIs</button>
   </div>
 
   <div class="card">
-    <div class="label">Console Log</div>
+    <button style="width: 100%;" onclick="copyToken()">Copy Token to Clipboard</button>
+  </div>
+
+  <div class="card">
+    <div class="label">Event & Operation Log</div>
     <div id="log" class="value"></div>
   </div>
 
   <script>
     function log(msg) {
       const logBox = document.getElementById("log");
-      const timestamp = new Date().toLocaleTimeString();
-      logBox.innerText += `[${timestamp}] ${msg}\n`;
+      const time = new Date().toLocaleTimeString();
+      logBox.innerText += `[${time}] ${msg}\n`;
       logBox.scrollTop = logBox.scrollHeight;
       console.log(msg);
     }
@@ -101,127 +120,178 @@
       document.getElementById("status").innerText = text;
     }
 
-    function displayToken(token) {
-      document.getElementById("token").innerText = token;
-      setStatus("Token retrieved successfully");
-      log("FCM Token: " + token);
+    function setToken(val) {
+      document.getElementById("token").innerText = val;
+      setStatus("Token acquired!");
+      log(">>> SUCCESS: Device Token set: " + val);
     }
 
     function getBridge() {
-      if (window.median && window.median.firebaseMessaging) {
-        return window.median.firebaseMessaging;
-      }
-      if (window.gonative && window.gonative.firebaseMessaging) {
-        return window.gonative.firebaseMessaging;
-      }
+      if (window.median && window.median.firebaseMessaging) return window.median.firebaseMessaging;
+      if (window.gonative && window.gonative.firebaseMessaging) return window.gonative.firebaseMessaging;
       return null;
     }
 
-    function requestToken() {
-      const fcm = getBridge();
-      if (!fcm) {
-        log("Error: FCM bridge not found on window.median or window.gonative");
-        setStatus("Bridge not available");
+    function inspectBridge() {
+      const root = window.median || window.gonative;
+      if (!root) {
+        log("No median or gonative object found on window.");
+        document.getElementById("bridge-methods").innerText = "No Bridge Found";
         return;
       }
 
-      setStatus("Fetching token...");
-      log("Calling getToken()...");
+      const fcm = getBridge();
+      if (!fcm) {
+        const rootKeys = Object.keys(root).join(", ");
+        log("Root found, but firebaseMessaging missing. Root keys: " + rootKeys);
+        document.getElementById("bridge-methods").innerText = `Root keys: ${rootKeys}`;
+        return;
+      }
 
-      try {
-        const res = fcm.getToken({
-          callback: function (result) {
-            if (result && result.token) {
-              displayToken(result.token);
-            } else {
-              log("getToken callback response: " + JSON.stringify(result));
-            }
+      const methods = Object.getOwnPropertyNames(fcm).concat(Object.keys(fcm));
+      const uniqueMethods = [...new Set(methods)].filter(m => typeof fcm[m] === 'function');
+      document.getElementById("bridge-methods").innerText = uniqueMethods.length > 0 
+        ? "Available: " + uniqueMethods.join(", ") 
+        : "Module present, but no enumerable functions.";
+      
+      log("FCM methods discovered: " + uniqueMethods.join(", "));
+    }
+
+    // 1. Explicitly request permission & registration (Required on iOS before tokens can exist)
+    function runRegisterWithPermission() {
+      const root = window.median || window.gonative;
+      const fcm = getBridge();
+
+      setStatus("Requesting permission...");
+      log("Triggering permission & registration sequence...");
+
+      // Try explicit permissions API if present
+      if (root && root.permissions && typeof root.permissions.request === 'function') {
+        log("Invoking root.permissions.request({ permission: 'notifications' })...");
+        root.permissions.request({
+          permission: "notifications",
+          callback: function(res) {
+            log("Permissions API result: " + JSON.stringify(res));
           }
         });
+      }
 
-        // Handle Promise-based bridge implementations
-        if (res && typeof res.then === "function") {
-          res.then(function (result) {
-            if (result && result.token) {
-              displayToken(result.token);
+      // Try FCM register
+      if (fcm && typeof fcm.register === 'function') {
+        log("Calling fcm.register()...");
+        try {
+          const res = fcm.register({
+            callback: function(result) {
+              log("fcm.register callback: " + JSON.stringify(result));
+              if (result && result.token) setToken(result.token);
             }
-          }).catch(function (err) {
-            log("Promise error: " + err);
           });
+          if (res && typeof res.then === 'function') {
+            res.then(r => {
+              log("fcm.register promise resolved: " + JSON.stringify(r));
+              if (r && r.token) setToken(r.token);
+            }).catch(e => log("fcm.register promise rejected: " + e));
+          }
+        } catch (e) {
+          log("fcm.register threw: " + e.message);
         }
-      } catch (err) {
-        log("Exception invoking getToken(): " + err.message);
+      } else {
+        log("fcm.register() is not available on this bridge.");
       }
     }
 
-    function requestRegister() {
+    // 2. Fetch Token with timeout detection
+    function runGetToken() {
       const fcm = getBridge();
-      if (!fcm || !fcm.register) {
-        log("Error: register() method not found on bridge");
+      if (!fcm || typeof fcm.getToken !== 'function') {
+        log("Error: fcm.getToken() unavailable.");
         return;
       }
 
-      setStatus("Calling register()...");
-      log("Calling fcm.register()...");
+      setStatus("Calling getToken()...");
+      log("Invoking fcm.getToken()...");
+
+      let responded = false;
+      const timer = setTimeout(() => {
+        if (!responded) {
+          log("Warning: getToken() hasn't responded after 6s. APNs exchange might be hanging.");
+        }
+      }, 6000);
 
       try {
-        const res = fcm.register({
-          callback: function (result) {
-            if (result && result.token) {
-              displayToken(result.token);
-            } else {
-              log("register callback response: " + JSON.stringify(result));
-            }
+        const res = fcm.getToken({
+          callback: function(result) {
+            responded = true;
+            clearTimeout(timer);
+            log("getToken callback returned: " + JSON.stringify(result));
+            if (result && result.token) setToken(result.token);
           }
         });
 
-        if (res && typeof res.then === "function") {
-          res.then(function (result) {
-            if (result && result.token) {
-              displayToken(result.token);
-            }
-          }).catch(function (err) {
-            log("Promise error: " + err);
+        if (res && typeof res.then === 'function') {
+          res.then(r => {
+            responded = true;
+            clearTimeout(timer);
+            log("getToken promise resolved: " + JSON.stringify(r));
+            if (r && r.token) setToken(r.token);
+          }).catch(e => {
+            responded = true;
+            clearTimeout(timer);
+            log("getToken promise rejected: " + e);
           });
         }
       } catch (err) {
-        log("Exception invoking register(): " + err.message);
+        clearTimeout(timer);
+        log("getToken threw exception: " + err.message);
+      }
+    }
+
+    // 3. Query FCM Info status
+    function runFetchInfo() {
+      const fcm = getBridge();
+      if (!fcm || typeof fcm.info !== 'function') {
+        log("fcm.info() not supported on this version.");
+        return;
+      }
+
+      log("Calling fcm.info()...");
+      try {
+        fcm.info({
+          callback: function(info) {
+            log("fcm.info payload: " + JSON.stringify(info));
+            if (info && (info.token || info.fcmToken)) {
+              setToken(info.token || info.fcmToken);
+            }
+          }
+        });
+      } catch (e) {
+        log("fcm.info threw: " + e.message);
       }
     }
 
     function copyToken() {
       const token = document.getElementById("token").innerText;
       if (!token || token === "(None)") {
-        alert("No token available to copy.");
+        alert("No token to copy");
         return;
       }
-      navigator.clipboard.writeText(token).then(() => {
-        alert("Token copied to clipboard");
-      });
+      navigator.clipboard.writeText(token).then(() => alert("Token copied!"));
     }
 
-    // Auto-detect bridge ready
-    window.addEventListener("median_library_ready", function () {
-      log("Event 'median_library_ready' detected");
-      requestToken();
+    // Listen for Median broadcast events
+    window.addEventListener("median_firebase_messaging_token", function(e) {
+      log("Event 'median_firebase_messaging_token' received: " + JSON.stringify(e.detail));
+      if (e.detail && e.detail.token) setToken(e.detail.token);
     });
 
-    // Fallback detection if already injected or running on legacy container
-    document.addEventListener("DOMContentLoaded", function () {
-      log("User Agent: " + navigator.userAgent);
-      let attempts = 0;
-      const interval = setInterval(function () {
-        attempts++;
-        if (getBridge()) {
-          clearInterval(interval);
-          log("Bridge detected after " + (attempts * 100) + "ms");
-          requestToken();
-        } else if (attempts >= 30) {
-          clearInterval(interval);
-          setStatus("Bridge detection timed out");
-          log("Warning: Native bridge not detected after 3 seconds");
-        }
-      }, 100);
+    window.addEventListener("median_library_ready", function() {
+      log("median_library_ready event triggered");
+      inspectBridge();
+    });
+
+    document.addEventListener("DOMContentLoaded", function() {
+      log("UA: " + navigator.userAgent);
+      setTimeout(inspectBridge, 400);
     });
   </script>
 </body>
