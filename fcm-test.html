@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Median FCM Bridge Test Harness</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: 20px;
+      margin: 0;
+      background-color: #f4f6f8;
+      color: #333;
+    }
+    h2 {
+      margin-top: 0;
+      color: #1e293b;
+    }
+    .card {
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    .label {
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+    .value {
+      font-family: monospace;
+      font-size: 0.95rem;
+      word-break: break-all;
+      background: #e2e8f0;
+      padding: 10px;
+      border-radius: 4px;
+      display: block;
+      min-height: 24px;
+    }
+    button {
+      background-color: #73c593;
+      color: #fff;
+      border: none;
+      padding: 12px 20px;
+      font-size: 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+    button:hover {
+      background-color: #5ea87a;
+    }
+    #log {
+      font-size: 0.8rem;
+      height: 180px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Median / GoNative FCM Test</h2>
+
+  <div class="card">
+    <div class="label">Status</div>
+    <div id="status" class="value">Waiting for native bridge...</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Device Token</div>
+    <div id="token" class="value">(None)</div>
+  </div>
+
+  <div class="card">
+    <button onclick="requestToken()">Get Token</button>
+    <button onclick="requestRegister()">Register & Get Token</button>
+    <button onclick="copyToken()">Copy Token</button>
+  </div>
+
+  <div class="card">
+    <div class="label">Console Log</div>
+    <div id="log" class="value"></div>
+  </div>
+
+  <script>
+    function log(msg) {
+      const logBox = document.getElementById("log");
+      const timestamp = new Date().toLocaleTimeString();
+      logBox.innerText += `[${timestamp}] ${msg}\n`;
+      logBox.scrollTop = logBox.scrollHeight;
+      console.log(msg);
+    }
+
+    function setStatus(text) {
+      document.getElementById("status").innerText = text;
+    }
+
+    function displayToken(token) {
+      document.getElementById("token").innerText = token;
+      setStatus("Token retrieved successfully");
+      log("FCM Token: " + token);
+    }
+
+    function getBridge() {
+      if (window.median && window.median.firebaseMessaging) {
+        return window.median.firebaseMessaging;
+      }
+      if (window.gonative && window.gonative.firebaseMessaging) {
+        return window.gonative.firebaseMessaging;
+      }
+      return null;
+    }
+
+    function requestToken() {
+      const fcm = getBridge();
+      if (!fcm) {
+        log("Error: FCM bridge not found on window.median or window.gonative");
+        setStatus("Bridge not available");
+        return;
+      }
+
+      setStatus("Fetching token...");
+      log("Calling getToken()...");
+
+      try {
+        const res = fcm.getToken({
+          callback: function (result) {
+            if (result && result.token) {
+              displayToken(result.token);
+            } else {
+              log("getToken callback response: " + JSON.stringify(result));
+            }
+          }
+        });
+
+        // Handle Promise-based bridge implementations
+        if (res && typeof res.then === "function") {
+          res.then(function (result) {
+            if (result && result.token) {
+              displayToken(result.token);
+            }
+          }).catch(function (err) {
+            log("Promise error: " + err);
+          });
+        }
+      } catch (err) {
+        log("Exception invoking getToken(): " + err.message);
+      }
+    }
+
+    function requestRegister() {
+      const fcm = getBridge();
+      if (!fcm || !fcm.register) {
+        log("Error: register() method not found on bridge");
+        return;
+      }
+
+      setStatus("Calling register()...");
+      log("Calling fcm.register()...");
+
+      try {
+        const res = fcm.register({
+          callback: function (result) {
+            if (result && result.token) {
+              displayToken(result.token);
+            } else {
+              log("register callback response: " + JSON.stringify(result));
+            }
+          }
+        });
+
+        if (res && typeof res.then === "function") {
+          res.then(function (result) {
+            if (result && result.token) {
+              displayToken(result.token);
+            }
+          }).catch(function (err) {
+            log("Promise error: " + err);
+          });
+        }
+      } catch (err) {
+        log("Exception invoking register(): " + err.message);
+      }
+    }
+
+    function copyToken() {
+      const token = document.getElementById("token").innerText;
+      if (!token || token === "(None)") {
+        alert("No token available to copy.");
+        return;
+      }
+      navigator.clipboard.writeText(token).then(() => {
+        alert("Token copied to clipboard");
+      });
+    }
+
+    // Auto-detect bridge ready
+    window.addEventListener("median_library_ready", function () {
+      log("Event 'median_library_ready' detected");
+      requestToken();
+    });
+
+    // Fallback detection if already injected or running on legacy container
+    document.addEventListener("DOMContentLoaded", function () {
+      log("User Agent: " + navigator.userAgent);
+      let attempts = 0;
+      const interval = setInterval(function () {
+        attempts++;
+        if (getBridge()) {
+          clearInterval(interval);
+          log("Bridge detected after " + (attempts * 100) + "ms");
+          requestToken();
+        } else if (attempts >= 30) {
+          clearInterval(interval);
+          setStatus("Bridge detection timed out");
+          log("Warning: Native bridge not detected after 3 seconds");
+        }
+      }, 100);
+    });
+  </script>
+</body>
+</html>
